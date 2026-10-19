@@ -249,11 +249,11 @@
     <img id="lbImage" src="" alt="">
 </div>
 
-<audio id="invitationMusic" preload="auto" loop>
-    <source src="audio/camino-al-altar.mp3?v=1" type="audio/mpeg">
-</audio>
+<!-- Cancion: Alejandro Fernandez - Me Hace Tanto Bien (video oficial en YouTube, reproductor embebido) -->
+<div id="ytMusic" aria-hidden="true" style="position:fixed;width:1px;height:1px;left:-9999px;top:0;overflow:hidden;"></div>
+<script src="https://www.youtube.com/iframe_api"></script>
 <button class="music-toggle" id="musicToggle" type="button" aria-label="Reproducir música" aria-pressed="false">
-    <i class="fas fa-volume-high"></i><span>Camino al altar</span>
+    <i class="fas fa-volume-high"></i><span>Me hace tanto bien</span>
 </button>
 
 <script>
@@ -263,7 +263,47 @@
     // ── Fecha del evento: sábado 10 de abril de 2027, 1:00 PM (ceremonia) ──
     var EVENTO = new Date(2027, 3, 10, 13, 0, 0);
     var EVENTO_FIN = new Date(2027, 3, 10, 22, 30, 0);
-    var music = document.getElementById('invitationMusic');
+    // Adaptador: expone play()/pause()/paused/addEventListener como un <audio>,
+    // pero reproduce el video oficial de YouTube con la IFrame API.
+    var music = (function () {
+        var VIDEO_ID = 'DX4ZrmdLSQ8';
+        var player = null, ready = false, pendiente = false;
+        var oyentes = { play: [], pause: [] };
+        var api = {
+            paused: true,
+            play: function () {
+                pendiente = true;
+                if (ready) player.playVideo();
+                return new Promise(function (res, rej) {
+                    var t0 = Date.now();
+                    (function check() {
+                        if (!api.paused) return res();
+                        if (Date.now() - t0 > 4000) return rej(new Error('bloqueado'));
+                        setTimeout(check, 200);
+                    })();
+                });
+            },
+            pause: function () { pendiente = false; if (ready) player.pauseVideo(); },
+            addEventListener: function (ev, fn) { if (oyentes[ev]) oyentes[ev].push(fn); }
+        };
+        function emitir(ev) { oyentes[ev].forEach(function (fn) { fn(); }); }
+        function crear() {
+            player = new YT.Player('ytMusic', {
+                width: 1, height: 1, videoId: VIDEO_ID,
+                playerVars: { autoplay: 0, controls: 0, loop: 1, playlist: VIDEO_ID, playsinline: 1 },
+                events: {
+                    onReady: function () { ready = true; player.setVolume(70); if (pendiente) player.playVideo(); },
+                    onStateChange: function (e) {
+                        if (e.data === YT.PlayerState.PLAYING) { api.paused = false; emitir('play'); }
+                        else if (e.data === YT.PlayerState.PAUSED || e.data === YT.PlayerState.ENDED) { api.paused = true; emitir('pause'); }
+                    }
+                }
+            });
+        }
+        if (window.YT && YT.Player) crear();
+        else { var prev = window.onYouTubeIframeAPIReady; window.onYouTubeIframeAPIReady = function () { if (prev) prev(); crear(); }; }
+        return api;
+    })();
     var musicToggle = document.getElementById('musicToggle');
     function setMusicState(playing) {
         musicToggle.classList.toggle('is-playing', playing);
